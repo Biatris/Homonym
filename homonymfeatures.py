@@ -1,10 +1,11 @@
 import pandas as pd
 import nltk
 import string
+import numpy as np
 from nltk.tokenize import word_tokenize
 from collections.abc import Iterable
 from rnnmorph.predictor import RNNMorphPredictor
-
+from sklearn.feature_extraction.text import CountVectorizer
 
 
 
@@ -37,7 +38,8 @@ class HomonymFeatures():
         self.fulldata["target_word_start"] = target_word_start
         self.fulldata["target_word_stop"] = target_word_stop
 
-        pass
+        self.allpos = ["NOUN", "ADJF", "ADJS", "COMP", "VERB", "INFN", "PRTF", "PRTS", "GRND", "NUMR",
+                  "ADVB", "NPRO", "PRED", "PREP", "CONJ", "PRCL", "INTJ", "ADP"]
 
     def CreateTokensCorpus(self, tokenizer = "nltk", verbose = False):
         if verbose:
@@ -67,14 +69,17 @@ class HomonymFeatures():
     def CreatePosCorpus(self, look, language = "ru", verbose = False):
         if language == "ru":
             morph = RNNMorphPredictor(language="ru")
-            #for index, row in self.fulldata_words.iterrows():
-            #    if verbose:
-            #        print([p.pos for p in morph.predict(row["token"]) if p.pos])
+            vectorizer = CountVectorizer()
+            vectorizer.fit([" ".join(self.allpos)])
+
             def create_pos_features(g):
-                context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )]
-                print(context_words)
-                return 1
-            self.fulldata_words.groupby("sentence_num").apply(create_pos_features)
+                context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )] ["token"].values
+                context_pos = [list(p.pos for p in morph.predict(token)) for token in context_words]
+                context_pos = [x for l in context_pos for x in l]
+                return " ".join( context_pos )
+            pos_sentences = self.fulldata_words.groupby("sentence_num").apply(create_pos_features)
+            return pos_sentences.apply(lambda x: pd.Series(data = vectorizer.transform([x]).toarray() [0], index = vectorizer.get_feature_names() ) )
+            
         elif language == "en":
             raise NotImplementedError
         else:
