@@ -1,8 +1,9 @@
 import pandas as pd
 import nltk
+import string
 from nltk.tokenize import word_tokenize
 from collections.abc import Iterable
-
+from rnnmorph.predictor import RNNMorphPredictor
 
 
 
@@ -16,7 +17,7 @@ class HomonymFeatures():
 
         if not isinstance(sentences, Iterable):
             raise HomonymFeaturesException("Sentences list is not iterable")
-        if not isinstance(pos_labels, Iterable):
+        if not isinstance(target_pos_labels, Iterable):
             raise HomonymFeaturesException("Pos labels list is not iterable")
         if not isinstance(target_word_start, Iterable):
             raise HomonymFeaturesException("Target word start list is not iterable")
@@ -32,30 +33,52 @@ class HomonymFeatures():
         self.fulldata = pd.DataFrame(columns = ["sentence", "pos_label", "target_word_start", "target_word_stop"])
 
         self.fulldata["sentence"] = sentences
-        self.fulldata["target_pos_label"] = pos_labels
+        self.fulldata["target_pos_label"] = target_pos_labels
         self.fulldata["target_word_start"] = target_word_start
         self.fulldata["target_word_stop"] = target_word_stop
 
         pass
 
-    def CreateTokensCorpus(self, tokenizer = "nltk"):
-
-        fulldata_words = pd.DataFrame(columns = ["sentence_num", "word_num", "target_pos_label", "target_word_num"])
+    def CreateTokensCorpus(self, tokenizer = "nltk", verbose = False):
+        if verbose:
+            print("self.fulldata")
+            print(self.fulldata)
+        fulldata_words = pd.DataFrame(columns = ["sentence_num", "word_num", "token", "target_pos_label", "target_word_num"])
         if tokenizer == "nltk":
-            for index, row in self.fulldata.itterrows():
-                tokenizedsen = nltk.word_tokenize(row["sentence"])
+            for index, row in self.fulldata.iterrows():
+                tokenizedsen = nltk.word_tokenize(row["sentence"]) ##TODO: add other pre-processing stuff
+                tokenizedsen = [t.casefold() for t in tokenizedsen if not t in string.punctuation] # add user expansion of droplist
+                if verbose:
+                    print(f"processing sentence {index}")
+                    print(tokenizedsen)
                 word_num = 0
+                ### TODO ### Handle case where target word is in sent multiple times
                 target_word_num = tokenizedsen.index(self.target_word) # add an exception if it's not found
                 for token in tokenizedsen:
-                    fulldata_words.append({"sentence_num": index, "word_num": word_num, "target_pos_label": row["target_pos_label"]}, ignore_index = True) 
+                    fulldata_words = fulldata_words.append({"sentence_num": index, "word_num": word_num, "token": token, "target_pos_label": row["target_pos_label"], "target_word_num": target_word_num}, ignore_index = True)
                     word_num += 1
+            if verbose:
+                print(fulldata_words)
+            self.fulldata_words = fulldata_words
+            return fulldata_words
+        else:
+            raise NotImplementedError
 
-            else:
-                raise NotImplementedError
-        pass
-
-    def CreatePosCorpus(self):
-        pass
+    def CreatePosCorpus(self, look, language = "ru", verbose = False):
+        if language == "ru":
+            morph = RNNMorphPredictor(language="ru")
+            #for index, row in self.fulldata_words.iterrows():
+            #    if verbose:
+            #        print([p.pos for p in morph.predict(row["token"]) if p.pos])
+            def create_pos_features(g):
+                context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )]
+                print(context_words)
+                return 1
+            self.fulldata_words.groupby("sentence_num").apply(create_pos_features)
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
 
     def CreateNearestPosFeature(self):
         pass
