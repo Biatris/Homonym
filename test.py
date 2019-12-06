@@ -9,3 +9,4 @@ my_hom = HomonymFeatures(q["sent"].values, q["word_id"].values, q["start"].value
 
 my_hom.CreateTokensCorpus(verbose = True)
 my_hom.CreatePosCorpus(look = 3, verbose = True)
+print(my_hom.fulldata_words)
