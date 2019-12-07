@@ -2,6 +2,7 @@ import pandas as pd
 import nltk
 import string
 import numpy as np
+import pymorphy2
 from nltk.tokenize import word_tokenize
 from collections.abc import Iterable
 from rnnmorph.predictor import RNNMorphPredictor
@@ -79,7 +80,7 @@ class HomonymFeatures():
                 return " ".join( context_pos )
             pos_sentences = self.fulldata_words.groupby("sentence_num").apply(create_pos_features)
             return pos_sentences.apply(lambda x: pd.Series(data = vectorizer.transform([x]).toarray() [0], index = vectorizer.get_feature_names() ) )
-            
+
         elif language == "en":
             raise NotImplementedError
         else:
@@ -89,9 +90,18 @@ class HomonymFeatures():
         pass
 
     def CreateLemmaCorpus(self):
+        morph = pymorphy2.MorphAnalyzer()
+        self.fulldata_words['normal_forms'] = self.fulldata_words['token'].apply(lambda q : morph.parse(q)[0].normal_form)
+
         pass
 
     def CreateRelativePositionEncoding(self):
+        def create_rpc_features(g):
+            context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )] ["token"].values
+            #context_pos = [list(p.pos for p in morph.predict(token)) for token in context_words]
+            #context_pos = [x for l in context_pos for x in l]
+            #return " ".join(context_pos)
+        #rpc_features = self.fulldata_words.groupby("sentence_num").apply(create_rpc_features)
         pass
 
     def CreateWordNetFeatures(self):
