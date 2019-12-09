@@ -74,6 +74,7 @@ class HomonymFeatures():
             vectorizer.fit([" ".join(self.allpos)])
 
             def create_pos_features(g):
+
                 context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )] ["token"].values
                 context_pos = [list(p.pos for p in morph.predict(token)) for token in context_words]
                 context_pos = [x for l in context_pos for x in l]
@@ -86,23 +87,45 @@ class HomonymFeatures():
         else:
             NotImplementedError
 
-    def CreateNearestPosFeature(self):
-        pass
 
-    def CreateLemmaCorpus(self):
+    def CreateNearestPosFeature(self, look, language = "ru", verbose = False):
+        if language == "ru":
+            morph = RNNMorphPredictor(language="ru")
+
+            def create_npos_features(g):
+                forward_context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & (g["word_num"] > g["target_word_num"] )] ["token"].values
+                backward_context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & (g["word_num"] < g["target_word_num"] )] ["token"].values
+                forward_context_pos = [list(p.pos for p in morph.predict(token)) for token in forward_context_words]
+                backward_context_pos = [list(p.pos for p in morph.predict(token)) for token in backward_context_words][::-1]
+                print(forward_context_pos, backward_context_pos)
+                pos_distances = []
+                pos_indices = []
+                for pos in self.allpos:
+                    pos_forward_in = [(pos in l) for l in forward_context_pos]
+                    pos_backward_in = [(pos in l) for l in backward_context_pos]
+                    pos_indices.append(f"{pos}_forward")
+                    pos_distances.append(pos_forward_in.index(True) if True in pos_forward_in else 0)
+                    pos_indices.append(f"{pos}_backward")
+                    pos_distances.append(pos_backward_in.index(True) if True in pos_backward_in else 0)
+                distance_features = pd.Series(data = pos_distances, index = pos_indices)
+                return distance_features
+            return self.fulldata_words.groupby("sentence_num").apply(create_npos_features)
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
+
+
+
+    def CreateLemmaCorpus(self, verbose = False):
         morph = pymorphy2.MorphAnalyzer()
         self.fulldata_words['normal_forms'] = self.fulldata_words['token'].apply(lambda q : morph.parse(q)[0].normal_form)
 
         pass
 
-    def CreateRelativePositionEncoding(self):
-        def create_rpc_features(g):
-            context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )] ["token"].values
-            #context_pos = [list(p.pos for p in morph.predict(token)) for token in context_words]
-            #context_pos = [x for l in context_pos for x in l]
-            #return " ".join(context_pos)
-        #rpc_features = self.fulldata_words.groupby("sentence_num").apply(create_rpc_features)
+    def CreateRelativePositionEncoding(self, look, verbose = False):
         pass
+
 
     def CreateWordNetFeatures(self):
         pass
