@@ -7,7 +7,8 @@ from nltk.tokenize import word_tokenize
 from collections.abc import Iterable
 from rnnmorph.predictor import RNNMorphPredictor
 from sklearn.feature_extraction.text import CountVectorizer
-
+from sklearn.feature_extraction.text import HashingVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 class HomonymFeaturesException(Exception):
@@ -40,17 +41,18 @@ class HomonymFeatures():
         self.fulldata["target_word_stop"] = target_word_stop
 
         self.allpos = ["NOUN", "ADJF", "ADJS", "COMP", "VERB", "INFN", "PRTF", "PRTS", "GRND", "NUMR",
-                  "ADVB", "NPRO", "PRED", "PREP", "CONJ", "PRCL", "INTJ", "ADP"]
+                        "ADVB", "NPRO", "PRED", "PREP", "CONJ", "PRCL", "INTJ"]
 
-    def CreateTokensCorpus(self, tokenizer = "nltk", verbose = False):
+    def CreateTokensCorpus(self, tokenizer = "nltk", verbose = False): #creates a DF, but not the features
         if verbose:
             print("self.fulldata")
             print(self.fulldata)
         fulldata_words = pd.DataFrame(columns = ["sentence_num", "word_num", "token", "target_pos_label", "target_word_num"])
         if tokenizer == "nltk":
             for index, row in self.fulldata.iterrows():
-                tokenizedsen = nltk.word_tokenize(row["sentence"]) ##TODO: add other pre-processing stuff
-                tokenizedsen = [t.casefold() for t in tokenizedsen if not t in string.punctuation] # add user expansion of droplist
+                tokenizedsen = nltk.word_tokenize(row["sentence"]) ##TODO: add other pre-processing stuff(including stripping all quotes etc prior to tokenizing)
+                extra = ['«', '»', '…', '―', '...', '№', '❤', '``', '\'']
+                tokenizedsen = [t.casefold() for t in tokenizedsen if not t in string.punctuation and not t in extra and not t.isdigit()] # add user expansion of droplist
                 if verbose:
                     print(f"processing sentence {index}")
                     print(tokenizedsen)
@@ -67,17 +69,12 @@ class HomonymFeatures():
         else:
             raise NotImplementedError
 
-    def CreatePosCorpus(self, look, language = "ru", verbose = False):
+    def CreatePosFeature(self, look, language = "ru", verbose = False): #creates a DataFrame
         if language == "ru":
-            morph = RNNMorphPredictor(language="ru")
             vectorizer = CountVectorizer()
             vectorizer.fit([" ".join(self.allpos)])
-
             def create_pos_features(g):
-
-                context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )] ["token"].values
-                context_pos = [list(p.pos for p in morph.predict(token)) for token in context_words]
-                context_pos = [x for l in context_pos for x in l]
+                context_pos = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )]['POS1'].values
                 return " ".join( context_pos )
             pos_sentences = self.fulldata_words.groupby("sentence_num").apply(create_pos_features)
             return pos_sentences.apply(lambda x: pd.Series(data = vectorizer.transform([x]).toarray() [0], index = vectorizer.get_feature_names() ) )
@@ -87,17 +84,11 @@ class HomonymFeatures():
         else:
             NotImplementedError
 
-
     def CreateNearestPosFeature(self, look, language = "ru", verbose = False):
         if language == "ru":
-            morph = RNNMorphPredictor(language="ru")
-
             def create_npos_features(g):
-                forward_context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & (g["word_num"] > g["target_word_num"] )] ["token"].values
-                backward_context_words = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & (g["word_num"] < g["target_word_num"] )] ["token"].values
-                forward_context_pos = [list(p.pos for p in morph.predict(token)) for token in forward_context_words]
-                backward_context_pos = [list(p.pos for p in morph.predict(token)) for token in backward_context_words][::-1]
-                print(forward_context_pos, backward_context_pos)
+                forward_context_pos = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & (g["word_num"] > g["target_word_num"] )]['POS1'].values
+                backward_context_pos = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & (g["word_num"] < g["target_word_num"] )]['POS1'].values
                 pos_distances = []
                 pos_indices = []
                 for pos in self.allpos:
@@ -115,17 +106,65 @@ class HomonymFeatures():
         else:
             NotImplementedError
 
+    def CreatePosCorpus(self, language = 'ru', verbose = False):
+        if language == "ru":
+            morph = pymorphy2.MorphAnalyzer()
+            tag = morph.TagClass
+            def get_pos(q):
+                x = morph.tag(q)[0].POS
+                if x is not None:
+                    return x.casefold()
+                else:
+                    return 'fail'
+            self.fulldata_words['POS1'] = self.fulldata_words['token'].apply(get_pos)
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
+        return self.fulldata_words
 
+    def CreateLemmaCorpus(self, language = "ru", verbose = False):
+        if language == "ru":
+            morph = pymorphy2.MorphAnalyzer()
+            self.fulldata_words['normal_forms'] = self.fulldata_words['token'].apply(lambda q : morph.parse(q)[0].normal_form)
 
-    def CreateLemmaCorpus(self, verbose = False):
-        morph = pymorphy2.MorphAnalyzer()
-        self.fulldata_words['normal_forms'] = self.fulldata_words['token'].apply(lambda q : morph.parse(q)[0].normal_form)
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
 
-        pass
+        return self.fulldata_words
 
-    def CreateRelativePositionEncoding(self, look, verbose = False):
-        pass
+    def CreateLemmaFeature(self, look, language = "ru", verbose = False): #creates a DataFrame
+        if language == "ru":
+            vectorizer = CountVectorizer()
+            vectorizer.fit([" ".join(self.fulldata_words['normal_forms'].values)])
+            def create_lemma_features(g):
+                context_lemmas = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )]['normal_forms'].values
+                return " ".join( context_lemmas )
+            lemma_sentences = self.fulldata_words.groupby("sentence_num").apply(create_lemma_features)
+            self.lemma_vectorizer = vectorizer
+            return lemma_sentences.apply(lambda x: pd.Series(data = vectorizer.transform([x]).toarray() [0], index = vectorizer.get_feature_names() ) )
 
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
+
+    def CreateRpeCorpus(self, language = "ru", verbose = False):
+        self.fulldata_words['rpe'] = self.fulldata_words['POS1'] + (self.fulldata_words['target_word_num'] - self.fulldata_words['word_num']).astype(str)
+
+        return self.fulldata_words
+
+    def CreateRpeFeature(self, look, verbose = False):
+        vectorizer = HashingVectorizer(n_features=2**8, ngram_range=(1,2))
+        vectorizer.fit(self.fulldata_words['rpe'].values)
+        def create_rpe_features(g):
+            rpe = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )]['rpe'].values
+            return " ".join( rpe )
+        rpe_sentences = self.fulldata_words.groupby("sentence_num").apply(create_rpe_features)
+        self.rpe_vectorizer = vectorizer
+        return rpe_sentences.apply(lambda x: pd.Series(data = vectorizer.transform([x]).toarray() [0], index = [f"rpe_hash_{k}" for k in range(vectorizer.n_features)] ) )
 
     def CreateWordNetFeatures(self):
         pass
