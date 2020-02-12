@@ -10,6 +10,7 @@ from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from spacy.lang.ru import Russian
 import re
+import maru
 
 class HomonymFeaturesException(Exception):
     def _init_ (self, *args):
@@ -39,11 +40,8 @@ class HomonymFeatures():
         self.fulldata["target_pos_label"] = target_pos_labels
         self.fulldata["target_word_start"] = target_word_start
         self.fulldata["target_word_stop"] = target_word_stop
-        #self.fulldata['word_id'] = word_ids
 
-        self.allpos = ["noun", "adjf", "adjs", "comp", "verb", "infn", "prtf", "prts", "grnd", "numb",
-                        "advb", "npro", "pred", "prep", "conj", "prcl", "intj"]
-        #self.fulldata['target_pos_label'] = self.fulldata['target_pos_label'].apply(lambda x: self.allpos.index(x.split('_')[1]))
+        self.allpos = ['adj', 'adp', 'adv', 'conj', 'det', 'h', 'intj', 'noun', 'part', 'pron', 'punct', 'unkn', 'verb']
 
         self.fulldata['target_pos_label'] = self.fulldata['target_pos_label'].apply(lambda x: self.allpos.index(x))
 
@@ -57,9 +55,10 @@ class HomonymFeatures():
         if tokenizer == "nltk":
             target_pos = []
             for index, row in self.fulldata.iterrows():
-                tokenizedsen = nltk.word_tokenize(re.sub(r'[^\s\w_]+', ' ', row["sentence"]) )  ##TODO: add other pre-processing stuff(including stripping all quotes etc prior to tokenizing)
+                tokenizedsen = nltk.word_tokenize(re.sub(r'[^\s\w_]+', ' ', row["sentence"]) )
                 extra = ['«', '»', '…', '―', '...', '№', '❤', '``', '\'', '..']
                 tokenizedsen = [t.casefold() for t in tokenizedsen if not t in string.punctuation and not t in extra and not t.isdigit()] # add user expansion of droplist
+
                 if verbose:
                     print(f"processing sentence {index}")
                     print(tokenizedsen)
@@ -121,15 +120,14 @@ class HomonymFeatures():
 
     def CreatePosCorpus(self, language = 'ru', verbose = False):
         if language == "ru":
-            morph = pymorphy2.MorphAnalyzer()
-            tag = morph.TagClass
+            analyzer = maru.get_analyzer(tagger='linear', lemmatizer='dummy')
+
             def get_pos(q):
-                x = morph.tag(q)[0].POS
-                if x is not None:
-                    return x.casefold()
-                else:
-                    return 'fail'
+                analyzed = analyzer.analyze([q])
+                return list(analyzed)[0].tag.pos.value.casefold() #print pos tag
+
             self.fulldata_words['POS1'] = self.fulldata_words['token'].apply(get_pos)
+
         elif language == "en":
             raise NotImplementedError
         else:
@@ -190,8 +188,52 @@ class HomonymFeatures():
         else:
             return rpe_sentences.apply(lambda x: pd.Series(data = vectorizer.transform([x]).toarray() [0], index = [f"rpe_hash_{k}" for k in range(vectorizer.n_features)] ) )
 
-    def CreateWordNetFeature(self, look, language = "ru", verbose = False):
+    def CreatePrevProbFeature(self, language = "ru", verbose = False):
+        if language == 'ru':
+            pw1_w0 = pd.read_csv ("/Users/biatris/Desktop/Homonym/data/Pw1_w0.csv", index_col = 0)
+            def create_cond_prob(g):
 
-        import conc_sim.py
+                if not g['target_word_num'].iloc[0] == 0:
+                    previous_word = g[ g["word_num"] == (g["target_word_num"] - 1) ]
+                    q = pw1_w0[ pw1_w0 ["w0"] == previous_word['POS1'].iloc[0] ]
+                    q = q[['w1', 'prob']].set_index('w1')
+                    s = q.reindex(index = self.allpos, fill_value = 0)
+                    return s['prob']
+                else:
+                    q = pw1_w0[ pw1_w0 ["w0"] == 'punct']
+                    q = q[['w1', 'prob']].set_index('w1')
+                    s = q.reindex(index = self.allpos, fill_value = 0)
+                    return s ['prob']
+            return self.fulldata_words.groupby("sentence_num").apply(create_cond_prob)
 
-        pass
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
+
+            return self.fulldata_words
+
+    def CreateNextProbFeature(self, language = "ru", verbose = False):
+        if language == 'ru':
+            pw0_w1 = pd.read_csv ("/Users/biatris/Desktop/Homonym/data/Pw0_w1.csv", index_col = 0)
+            def create_cond_prob(g):
+
+                if not g['target_word_num'].iloc[0] == g['word_num'].max():
+                    next_word = g[ g["word_num"] == (g["target_word_num"] + 1) ]
+                    q = pw0_w1[ pw0_w1 ["w1"] == next_word['POS1'].iloc[0] ]
+                    q = q[['w0', 'prob']].set_index('w0')
+                    s = q.reindex(index = self.allpos, fill_value = 0)
+                    return s['prob']
+                else:
+                    q = pw0_w1[ pw0_w1 ["w1"] == 'punct' ]
+                    q = q[['w0', 'prob']].set_index('w0')
+                    s = q.reindex(index = self.allpos, fill_value = 0)
+                    return s ['prob']
+            return self.fulldata_words.groupby("sentence_num").apply(create_cond_prob)
+
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
+
+            return self.fulldata_words
