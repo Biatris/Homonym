@@ -64,6 +64,6 @@ res_df.style.set_properties(subset=['text'], **{'width': '3000px'})
 pd.set_option('display.max_colwidth', -1)
 res_df.to_html("myresult.html")
 target_word = "дуло"
-with fileinput.FileInput("/Users/biatris/Desktop/Homonym/myresult.html", inplace=True) as f:
+with fileinput.FileInput("/Users/biatris/Desktop/Homonym/results/myresult.html", inplace=True) as f:
     for line in f:
         print(line.replace(target_word, f" <span style='color: red'> {target_word} </span>"), end='')
