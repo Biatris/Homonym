@@ -1,0 +1,7 @@
+pymorphy2
+pandas
+nltk
+numpy
+scikit-learn
+maru
+spacy
