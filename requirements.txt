@@ -3,5 +3,6 @@ pandas
 nltk
 numpy
 scikit-learn
+keras==2.2.5
 maru
-spacy
+wiki_ru_wordnet

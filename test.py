@@ -7,11 +7,12 @@ from sklearn.metrics import confusion_matrix
 import fileinput
 from sklearn.model_selection import ShuffleSplit
 
-q = pd.read_csv("/Users/biatris/Desktop/Homonym/data/Pila.tsv", sep = "\t")
-
+q = pd.read_csv("/Users/nataliatyulina/Desktop/Homonym/data/dulo_mini.tsv", sep = "\t")
+target_word = "дуло"
+q = q[q["word"] == target_word]
 q['word_id'] = q['word_id'].apply(lambda x: x.split('_')[-1])
 print(q['word_id'].unique())
-my_hom = HomonymFeatures(q["sent"].values, q["word_id"].values, q["start"].values, q["stop"].values, target_word = "пила")
+my_hom = HomonymFeatures(q["sent"].values, q["word_id"].values, q["start"].values, q["stop"].values, target_word = target_word)
 
 my_hom.CreateTokenCorpus(verbose = False)
 my_hom.CreatePosCorpus(verbose=False)
@@ -20,13 +21,13 @@ my_hom.CreateRpeCorpus(verbose = False)
 my_hom.CreateSynsetCorpus(verbose = True)
 
 #print(my_hom.fulldata_words.to_string())
-my_hom.fulldata_words.to_csv('/Users/biatris/Desktop/Homonym/data/fulldata_words_big_df.csv')
+#my_hom.fulldata_words.to_csv('/Users/nataliatyulina/Desktop/Homonym/data/fulldata_words_big_df.csv')
 pos_global_features = my_hom.CreatePosFeature(look = 5)
 pos_local_features = my_hom.CreatePosFeature(look = 1)
 nearest_pos_features = my_hom.CreateNearestPosFeature(look = 3)
 rpe_features = my_hom.CreateRpeFeature(look = 5)
-prev_markov_prob_features = my_hom.CreatePrevProbFeature(verbose = False)
-next_markov_prob_features = my_hom.CreateNextProbFeature(verbose = False)
+#prev_markov_prob_features = my_hom.CreatePrevProbFeature(verbose = False)
+#next_markov_prob_features = my_hom.CreateNextProbFeature(verbose = False)
 
 #Xtot = pd.concat((prev_markov_prob_features, next_markov_prob_features), axis = 1)
 #Xtot = pd.concat((pos_global_features, pos_local_features, lemma_features, nearest_pos_features, rpe_features), axis = 1)
@@ -53,8 +54,8 @@ for train_index, test_index in rs.split(pos_global_features.values):
     word_net_features_verb = my_hom.TransformWordNetFeature(pos_class = 'verb')
 
     #print(pos_global_features.shape, pos_local_features.shape, nearest_pos_features.shape, rpe_features.shape, prev_markov_prob_features.shape, next_markov_prob_features.shape, word_net_features_noun.shape, word_net_features_verb.shape)
-    Xtot = pd.concat((pos_global_features, pos_local_features, nearest_pos_features, rpe_features, lemma_features, prev_markov_prob_features, next_markov_prob_features, word_net_features_noun, word_net_features_verb), axis = 1)
-
+    Xtot = pd.concat((pos_global_features, pos_local_features, nearest_pos_features, rpe_features, lemma_features, word_net_features_noun, word_net_features_verb), axis = 1)
+    #prev_markov_prob_features, next_markov_prob_features
     X_aug = np.c_[Xtot, q[["sent"]].values]
     print(q.max())
     X_train, X_test, y_train, y_test = X_aug[train_index,:], X_aug[test_index,:], Y[train_index], Y[test_index]
@@ -84,8 +85,8 @@ ratio = round(score/baseline, 2)
 print(f"score: {score}, variance: {var}, baseline: {baseline}, score over baseline: {ratio}")
 res_df.style.set_properties(subset=['text'], **{'width': '3000px'})
 pd.set_option('display.max_colwidth', -1)
-res_df.to_html("myresult.html")
-target_word = "пила"
-with fileinput.FileInput("/Users/biatris/Desktop/Homonym/results/myresult.html", inplace=True) as f:
+res_df.to_html(f"/Users/nataliatyulina/Desktop/Homonym/data/{target_word}_result.html")
+target_word = target_word
+with fileinput.FileInput(f"/Users/nataliatyulina/Desktop/Homonym/data/{target_word}_result.html", inplace=True) as f:
     for line in f:
         print(line.replace(target_word, f" <span style='color: red'> {target_word} </span>"), end='')
