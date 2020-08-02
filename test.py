@@ -7,25 +7,26 @@ from sklearn.metrics import confusion_matrix
 import fileinput
 from sklearn.model_selection import ShuffleSplit
 
-q = pd.read_csv("/Users/nataliatyulina/Desktop/Homonym/data/dulo_mini.tsv", sep = "\t")
+q = pd.read_csv("/Users/nataliatyulina/Desktop/Homonym/data/dulo_220.tsv", sep = "\t")
 target_word = "дуло"
 q = q[q["word"] == target_word]
 q['word_id'] = q['word_id'].apply(lambda x: x.split('_')[-1])
 print(q['word_id'].unique())
 my_hom = HomonymFeatures(q["sent"].values, q["word_id"].values, q["start"].values, q["stop"].values, target_word = target_word)
 
-my_hom.CreateTokenCorpus(verbose = False)
+my_hom.CreateTokenCorpus(verbose = True)
 my_hom.CreatePosCorpus(verbose=False)
 my_hom.CreateLemmaCorpus(verbose = False)
 my_hom.CreateRpeCorpus(verbose = False)
 my_hom.CreateSynsetCorpus(verbose = True)
-
+#my_hom.CreateDepFeature()
 #print(my_hom.fulldata_words.to_string())
 #my_hom.fulldata_words.to_csv('/Users/nataliatyulina/Desktop/Homonym/data/fulldata_words_big_df.csv')
 pos_global_features = my_hom.CreatePosFeature(look = 5)
 pos_local_features = my_hom.CreatePosFeature(look = 1)
 nearest_pos_features = my_hom.CreateNearestPosFeature(look = 3)
 rpe_features = my_hom.CreateRpeFeature(look = 5)
+ud_features = my_hom.CreateDepFeature(verbose = True)
 #prev_markov_prob_features = my_hom.CreatePrevProbFeature(verbose = False)
 #next_markov_prob_features = my_hom.CreateNextProbFeature(verbose = False)
 
@@ -52,9 +53,10 @@ for train_index, test_index in rs.split(pos_global_features.values):
     lemma_features = my_hom.TransformLemmaFeature(look = 5)
     word_net_features_noun = my_hom.TransformWordNetFeature(pos_class = 'noun')
     word_net_features_verb = my_hom.TransformWordNetFeature(pos_class = 'verb')
-
+    print(ud_features)
     #print(pos_global_features.shape, pos_local_features.shape, nearest_pos_features.shape, rpe_features.shape, prev_markov_prob_features.shape, next_markov_prob_features.shape, word_net_features_noun.shape, word_net_features_verb.shape)
-    Xtot = pd.concat((pos_global_features, pos_local_features, nearest_pos_features, rpe_features, lemma_features, word_net_features_noun, word_net_features_verb), axis = 1)
+    #Xtot = pd.concat((pos_global_features, pos_local_features, nearest_pos_features, rpe_features, lemma_features, word_net_features_noun, word_net_features_verb, ud_features), axis = 1)
+    Xtot = ud_features
     #prev_markov_prob_features, next_markov_prob_features
     X_aug = np.c_[Xtot, q[["sent"]].values]
     print(q.max())

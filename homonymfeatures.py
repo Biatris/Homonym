@@ -15,6 +15,10 @@ from wiki_ru_wordnet import WikiWordnet
 from nltk.corpus import wordnet as wn
 from functools import reduce
 from operator import add
+from conll_df import conll_df
+from deeppavlov import build_model, configs
+import russian_tagsets
+from utils import dep, i_dep, create_row
 
 class HomonymFeaturesException(Exception):
     def _init_ (self, *args):
@@ -37,7 +41,7 @@ class HomonymFeatures():
         if not ((len(target_pos_labels) == len(sentences) ) and (len(target_word_start) == len(sentences)) and (len(target_word_stop) == len(sentences))):
             raise HomonymFeaturesException("Unmatched input lengths")
 
-        self.fulldata = pd.DataFrame(columns = ["sentence", "pos_label", "target_word_start", "target_word_stop", 'target_pos_label'])
+        self.fulldata = pd.DataFrame(columns = ["sentence", "target_word_start", "target_word_stop", 'target_pos_label'])
         self.fulldata["sentence"] = sentences
         self.fulldata["target_pos_label"] = target_pos_labels
         self.fulldata["target_word_start"] = target_word_start
@@ -326,3 +330,21 @@ class HomonymFeatures():
             return pd.Series(data = c.transform([' '.join (g['normal_forms'].values)]).toarray()[0], index = c.get_feature_names())
 
         return self.fulldata_words.groupby("sentence_num").apply(create_clue_counts)
+
+    def CreateDepFeature(self, language = "ru", verbose = False):
+        if language == "ru":
+            self.ud_model = build_model("ru_syntagrus_joint_parsing")
+            q = self.ud_model(self.fulldata['sentence'].values)
+            #q = list(zip(q, self.fulldata_words['target_word_num']))
+
+            res = []
+            for r in q:
+                res.append(create_row(r, self.target_word, self.allpos))
+
+            res = pd.DataFrame(data = res, index = self.fulldata.index)
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
+
+        return res
