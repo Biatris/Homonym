@@ -317,7 +317,7 @@ class HomonymFeatures():
 
         for w, v in all_clue_words.items():
             all_clue_words[w] = [y for y in all_clue_words[w] if y not in [x for k in all_clue_words.keys() for x in all_clue_words[k] if k != w]]
-        all_clue_words = {k: v[:30] for k, v in all_clue_words.items()}
+        all_clue_words = {k: v[:10] for k, v in all_clue_words.items()}
         self.all_clue_words = all_clue_words
         print(all_clue_words)
         return all_clue_words
@@ -334,7 +334,10 @@ class HomonymFeatures():
     def CreateDepFeature(self, language = "ru", verbose = False):
         if language == "ru":
             self.ud_model = build_model("ru_syntagrus_joint_parsing")
-            q = self.ud_model(self.fulldata['sentence'].values)
+            q = []
+            for s in self.fulldata['sentence'].values:
+                q.append(self.ud_model([s])[0])
+            #q = self.ud_model(self.fulldata['sentence'].values)
             #q = list(zip(q, self.fulldata_words['target_word_num']))
 
             res = []

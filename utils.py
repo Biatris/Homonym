@@ -24,10 +24,11 @@ def create_row(r, target_word, allpos):
     file.close()
     df = conll_df("temp/temp.win", file_index=False)
     df = df.reset_index()
+    print(df)
     tree_walk = i_dep(df[df["w"] == target_word].iloc[0], df)
     vectorizer = CountVectorizer()
     vectorizer.fit([" ".join(allpos)])
     #return df[df["w"] == target_word].iloc[0]
     z = vectorizer.transform([" ".join([w['p'] for w in tree_walk])]).todense().tolist()
-    
+
     return pd.Series(z[0])

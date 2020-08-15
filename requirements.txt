@@ -6,3 +6,5 @@ scikit-learn
 keras==2.2.5
 maru
 wiki_ru_wordnet
+conll_df
+deeppavlov
