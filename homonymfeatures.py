@@ -18,7 +18,8 @@ from operator import add
 from conll_df import conll_df
 from deeppavlov import build_model, configs
 import russian_tagsets
-from utils import dep, i_dep, create_row
+from utils import dep, i_dep, create_row, create_row_ranked
+from itertools import product
 
 class HomonymFeaturesException(Exception):
     def _init_ (self, *args):
@@ -342,9 +343,10 @@ class HomonymFeatures():
 
             res = []
             for r in q:
-                res.append(create_row(r, self.target_word, self.allpos))
-
+                res.append(create_row_ranked(r, self.target_word, self.allpos))
+                print(create_row_ranked(r, self.target_word, self.allpos))
             res = pd.DataFrame(data = res, index = self.fulldata.index)
+            res.columns = [f"{x}_{y}_ud_features" for x, y in product(range (3), range (13))]
         elif language == "en":
             raise NotImplementedError
         else:

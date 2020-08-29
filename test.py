@@ -10,8 +10,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.inspection import permutation_importance
 
-q = pd.read_csv("/Users/nataliatyulina/Desktop/Homonym/data/pila.tsv", sep = "\t")
-target_word = 'пила'#"дуло"#'пила'#'печь'"дуло"
+
+
+q = pd.read_csv("/Users/nataliatyulina/Desktop/Homonym/data/pila_mini.tsv", sep = "\t")
+target_word = 'пила' #'пила'#'печь'"дуло"
 q = q[q["word"] == target_word]
 q['word_id'] = q['word_id'].apply(lambda x: x.split('_')[-1])
 print(q['word_id'].unique())
@@ -51,7 +53,14 @@ res.append(mysgd.score( X_test, y_test ) )"""
 #X_train, X_test, y_train, y_test = train_test_split(X_aug, Y, test_size=0.2)
 feat_importance = pd.DataFrame()
 perm_feat_importance = pd.DataFrame()
+
+pos_global_features.columns = [("6_pos_global_features_" + str(q)) for q in pos_global_features.columns ]
+pos_local_features.columns = [("7_pos_local_features_" + str(q)) for q in pos_local_features.columns ]
+rpe_features.columns = [("8_rpe_features_" + str(q)) for q in rpe_features.columns ]
+nearest_pos_features.columns = [("9_nearest_pos_features_" + str(q)) for q in nearest_pos_features.columns ]
+
 rs = ShuffleSplit(n_splits=6, test_size=.2, random_state=0)
+split_n = 0
 for train_index, test_index in rs.split(pos_global_features.values):
     my_hom.FitLemmaFeature(train_indices = train_index)
     my_hom.FitWordNetFeature(num_clues = 10, train_indices = train_index)
@@ -59,16 +68,14 @@ for train_index, test_index in rs.split(pos_global_features.values):
     word_net_features_noun = my_hom.TransformWordNetFeature(pos_class = 'noun')
     word_net_features_verb = my_hom.TransformWordNetFeature(pos_class = 'verb')
 
-    ud_features.columns = [("1_ud_features_" + str(q)) for q in ud_features.columns ]
-    word_net_features_noun.columns = [("2_word_net_features_noun_" + str(q)) for q in word_net_features_noun.columns ]
-    word_net_features_verb.columns = [("3_word_net_features_verb_" + str(q) )for q in word_net_features_verb.columns ]
-    lemma_features.columns = [("4_lemma_features_" + str(q)) for q in lemma_features.columns ]
-    pos_global_features.columns = [("5_pos_global_features_" + str(q)) for q in pos_global_features.columns ]
-    pos_local_features.columns = [("6_pos_local_features_" + str(q)) for q in pos_local_features.columns ]
-    rpe_features.columns = [("7_rpe_features_" + str(q)) for q in rpe_features.columns ]
-    nearest_pos_features.columns = [("8_nearest_pos_features_" + str(q)) for q in nearest_pos_features.columns ]
-    print("ud_features")
-    print(ud_features)
+    #ud_features.columns = [("1_ud_features_" + str(q)) for q in ud_features.columns ]
+
+    word_net_features_noun.columns = [("3_word_net_features_noun_" + str(q)) for q in word_net_features_noun.columns ]
+    word_net_features_verb.columns = [("4_word_net_features_verb_" + str(q) )for q in word_net_features_verb.columns ]
+    lemma_features.columns = [("5_lemma_features_" + str(q)) for q in lemma_features.columns ]
+
+    #print("ud_features")
+    #print(ud_features)
     print('word_net_features_noun')
     print(word_net_features_noun)
     print('word_net_features_verb')
@@ -86,12 +93,21 @@ for train_index, test_index in rs.split(pos_global_features.values):
 
     #pos_local_features.columns = ["pos_local_features_" + str(q) for q in pos_local_features.columns ]
     #print(pos_global_features.shape, pos_local_features.shape, nearest_pos_features.shape, rpe_features.shape, prev_markov_prob_features.shape, next_markov_prob_features.shape, word_net_features_noun.shape, word_net_features_verb.shape)
-    Xtot = pd.concat((pos_global_features, pos_local_features, nearest_pos_features, rpe_features, lemma_features, word_net_features_noun, word_net_features_verb, ud_features), axis = 1)
+    Xtot = pd.concat((pos_global_features, pos_local_features, nearest_pos_features, rpe_features, lemma_features, word_net_features_noun, word_net_features_verb), axis = 1)
     #Xtot = pd.concat((pos_global_features, lemma_features, word_net_features_noun, ud_features), axis = 1)
     #Xtot = ud_features
     #prev_markov_prob_features, next_markov_prob_features
     Xtot = (Xtot - Xtot.mean())
     Xtot = (Xtot/(Xtot.max()-Xtot.min())).fillna(0)
+    corr = Xtot.corr()
+    sns_heat = sns.heatmap(corr, xticklabels=corr.columns, yticklabels=corr.columns)
+    fig = sns_heat.get_figure()
+    corr.to_csv(f"{split_n}_corr.csv")
+    plt.show()
+    fig.savefig(f"{split_n}_corr.png")
+    plt.clf()
+    #plt.savefig(f"{split_n}_corr.png")
+    split_n += 1
     X_aug = np.c_[Xtot, q[["sent"]].values]
     print(q.max())
     X_train, X_test, y_train, y_test = X_aug[train_index,:], X_aug[test_index,:], Y[train_index], Y[test_index]
@@ -125,16 +141,18 @@ for train_index, test_index in rs.split(pos_global_features.values):
 #pl = sns.heatmap(feat_importance, annot=True) #X_train, y_train, n_repeats=30
 feat_importance = feat_importance.fillna(0).abs()
 perm_feat_importance = perm_feat_importance.fillna(0).abs()
-
+Xtot['y'] = Y
+Xtot.to_csv('all_features.csv')
+print('KIWIKIWIKIWIKIWIKWIKWIKWIWKIWKWI')
 #sns.heatmap(feat_importance, xticklabels=True, yticklabels=True, center = 0)
 #plt.show()
 feat_importance.to_csv('feat_importance.csv')
 perm_feat_importance.to_csv('perm_feat_importance.csv')
 
-feat_importance = feat_importance.groupby(feat_importance.columns.str[0],axis=1).sum().mean()
-perm_feat_importance = perm_feat_importance.groupby(perm_feat_importance.columns.str[0],axis=1).sum().mean()
-feat_importance.index = ['pos_global_features', 'pos_local_features', 'nearest_pos_features', 'rpe_features', 'lemma_features', 'word_net_features_noun', 'word_net_features_verb', 'ud_features']
-perm_feat_importance.index = ['pos_global_features', 'pos_local_features', 'nearest_pos_features', 'rpe_features', 'lemma_features', 'word_net_features_noun', 'word_net_features_verb', 'ud_features']
+feat_importance = feat_importance.groupby(feat_importance.columns.str[0],axis=1).sum().sum()
+perm_feat_importance = perm_feat_importance.groupby(perm_feat_importance.columns.str[0],axis=1).sum().sum()
+feat_importance.index = ['pos_global_features', 'pos_local_features', 'nearest_pos_features', 'rpe_features', 'lemma_features', 'word_net_features_noun', 'word_net_features_verb', 'ud_features_0', 'ud_features_1', 'ud_features_2']
+perm_feat_importance.index = ['pos_global_features', 'pos_local_features', 'nearest_pos_features', 'rpe_features', 'lemma_features', 'word_net_features_noun', 'word_net_features_verb', 'ud_features_0', 'ud_features_1', 'ud_features_2']
 feat_importance.plot.bar()
 plt.show()
 perm_feat_importance.plot.bar()

@@ -5,3 +5,4 @@ temp/*
 .ipynb_checkpoints/
 *.ipynb
 *.csv
+*.png
