@@ -20,6 +20,7 @@ from deeppavlov import build_model, configs
 import russian_tagsets
 from utils import dep, i_dep, create_row, create_row_ranked
 from itertools import product
+from joblib import load
 
 class HomonymFeaturesException(Exception):
     def _init_ (self, *args):
@@ -48,6 +49,7 @@ class HomonymFeatures():
         self.fulldata["target_word_start"] = target_word_start
         self.fulldata["target_word_stop"] = target_word_stop
         self.allpos = ['adj', 'adp', 'adv', 'conj', 'det', 'h', 'intj', 'noun', 'part', 'pron', 'punct', 'unkn', 'verb']
+        self.alldeps = ['acl', 'advcl',	'advmod', 'amod', 'appos', 'aux', 'case', 'cc',	'ccomp', 'clf', 'compound', 'conj', 'cop', 'csubj', 'dep', 'det', 'discourse', 'dislocated', 'expl', 'fixed', 'flat', 'goeswith', 'iobj', 'list', 'mark', 'nmod', 'nsubj', 'nummod', 'obj',	'obl', 'orphan', 'parataxis', 'punct', 'reparandum', 'root', 'vocative', 'xcomp']
         self.fulldata['target_pos_label'] = self.fulldata['target_pos_label'].apply(lambda x: self.allpos.index(x))
         self.target_word = target_word
 
@@ -59,7 +61,8 @@ class HomonymFeatures():
         if tokenizer == "nltk":
             target_pos = []
             for index, row in self.fulldata.iterrows():
-                tokenizedsen = nltk.word_tokenize(re.sub(r'[^\s\w_]+', ' ', row["sentence"]) )
+                #tokenizedsen = nltk.word_tokenize(re.sub(r'[^\s\w_]+', ' ', row["sentence"]) )
+
                 russian_stopwords = stopwords.words("russian")
                 tokenizedsen = [t.casefold() for t in tokenizedsen if not t in string.punctuation and not t in russian_stopwords and not t.isdigit()] # add user expansion of droplist
 
@@ -70,6 +73,7 @@ class HomonymFeatures():
                 ### TODO ### Handle case where target word is in sent multiple times
                 print(tokenizedsen)
                 target_word_num = tokenizedsen.index(self.target_word) # add an exception if it's not found
+                print('MEGAKIWIKIWIKIWIKIWIKWIKWIKWIWKIWKWI')
                 #target_pos.append(self.allpos.index(row['word_id']) )
                 for token in tokenizedsen:
                     fulldata_words = fulldata_words.append({"sentence_num": index, "word_num": word_num, "token": token, "target_pos_label": row["target_pos_label"], "target_word_num": target_word_num}, ignore_index = True)
@@ -99,6 +103,45 @@ class HomonymFeatures():
                 print(fulldata_words)
             self.fulldata_words = fulldata_words
             return fulldata_words
+
+    def CreateFunctionRPECorpus(self, tokenizer = "russian_tokenizer", language = 'ru', verbose = False):
+        if language == "ru":
+            self.ud_model = build_model("ru_syntagrus_joint_parsing")
+            alltrees = pd.DataFrame(columns = ['i', 's', 'w', 'l', 'p', 'g', 'f'])
+            for i, s in enumerate(self.fulldata['sentence'].values):
+                file = open('temp/temp.win', 'w')
+                file.write((self.ud_model([s])[0]))
+                file.close()
+                df = conll_df("temp/temp.win", file_index=False)
+                df = df.reset_index()
+                df['s'] = i
+                df['target_word_num'] = df['w'].to_list().index(self.target_word)
+                alltrees = alltrees.append(df, ignore_index = True)
+                #print(df)
+
+        alltrees = alltrees.rename(columns = {'s': "sentence_num", 'i': "word_num", 'w': 'token', 'p': 'POS1'})
+        #self.fulldata_words = self.fulldata_words.merge(alltrees, on = ['sentence_num', 'word_num'], how = 'outer')
+        self.fulldata_words = alltrees.merge(self.fulldata[['sentence', 'target_pos_label']], left_on = 'sentence_num', right_index = True, how = 'inner')
+        #return self.fulldata_words
+        self.fulldata_words['POS1'] = self.fulldata_words['POS1'].str.casefold()
+        return self.fulldata_words
+
+    def CreateFunctionRpeFeature(self, look, test = False, verbose = False):
+        if not test:
+            vectorizer = HashingVectorizer(n_features=2**8, ngram_range=(1,2))
+            vectorizer.fit(self.fulldata_words['f'].values)
+            self.rpe_vectorizer = vectorizer
+
+        def create_f_rpe_features(g):
+            f_rpe = g[( (g["word_num"] - g["target_word_num"]).abs() <= look ) & ~(g["word_num"] == g["target_word_num"] )]['f'].values
+            return " ".join( f_rpe )
+        f_rpe_sentences = self.fulldata_words.groupby("sentence_num").apply(create_f_rpe_features)
+
+        if test:
+            return f_rpe_sentences.apply(lambda x: pd.Series(data = self.rpe_vectorizer.transform([x]).toarray() [0], index = [f"rpe_hash_{k}" for k in range(vectorizer.n_features)] ) )
+        else:
+            return f_rpe_sentences.apply(lambda x: pd.Series(data = vectorizer.transform([x]).toarray() [0], index = [f"rpe_hash_{k}" for k in range(vectorizer.n_features)] ) )
+
 
     def CreatePosFeature(self, look, test = False, language = "ru", verbose = False):
         if language == "ru":
@@ -310,7 +353,7 @@ class HomonymFeatures():
                     for r in w.get_words():
                         word = r.definition().split('~')[0]
                         pos = get_pos(word)
-                        if pos in ['noun', 'verb', 'adj']:
+                        if pos in ['noun', 'verb', 'adj', 'adv']:
                             all_syn.append(morph.parse(word)[0].normal_form)
                             print(word, pos, morph.parse(word)[0].normal_form )
             clue_words = pd.Series(all_syn).value_counts().index.values
@@ -326,6 +369,8 @@ class HomonymFeatures():
     def TransformWordNetFeature(self, pos_class, language = "ru", verbose = False):
         pos_class = self.allpos.index(pos_class)
         c = CountVectorizer()
+        print("NEWMWGAKIWIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII")
+        print(self.all_clue_words)
         c.fit(self.all_clue_words[pos_class])
         def create_clue_counts(g):
             return pd.Series(data = c.transform([' '.join (g['normal_forms'].values)]).toarray()[0], index = c.get_feature_names())
@@ -342,14 +387,27 @@ class HomonymFeatures():
             #q = list(zip(q, self.fulldata_words['target_word_num']))
 
             res = []
+            res_deps = []
             for r in q:
-                res.append(create_row_ranked(r, self.target_word, self.allpos))
-                print(create_row_ranked(r, self.target_word, self.allpos))
+                #res.append(create_row_ranked(r, self.target_word, self.allpos, self.alldeps))
+                q_pos, q_deps = create_row_ranked(r, self.target_word, self.allpos, self.alldeps)
+                res.append(q_pos)
+                res_deps.append(q_deps)
+                print(create_row_ranked(r, self.target_word, self.allpos, self.alldeps))
             res = pd.DataFrame(data = res, index = self.fulldata.index)
+            res_deps = pd.DataFrame(data = res_deps, index = self.fulldata.index)
             res.columns = [f"{x}_{y}_ud_features" for x, y in product(range (3), range (13))]
+            res_deps.columns = [f"{x}_{y}_ud_dep_features" for x, y in product(range (3, 6), range (37))]
+            #dropping ud_0 features
+            cols = [c for c in res.columns if c[0] != '0']
+            res = res[cols]
         elif language == "en":
             raise NotImplementedError
         else:
             NotImplementedError
 
-        return res
+        return res, res_deps
+
+    def CreateSent2VecFeature(self, language = "ru", verbose = False):
+        hv = load('/Users/nataliatyulina/Desktop/Homonym/supermegahashvec.jl')
+        return self.fulldata['sentence'].apply(lambda x: pd.Series(np.array(hv.transform([x]).todense())[0]))

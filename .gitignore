@@ -6,3 +6,4 @@ temp/*
 *.ipynb
 *.csv
 *.png
+*.jl
