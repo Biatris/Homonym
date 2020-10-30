@@ -12,7 +12,7 @@ from sklearn.inspection import permutation_importance
 from sklearn.ensemble import RandomForestClassifier
 from sys import exit
 
-q = pd.read_csv("/Users/nataliatyulina/Desktop/Homonym/data/dulo_med.tsv", sep = "\t")
+q = pd.read_csv("/Users/nataliatyulina/Desktop/Homonym/data/dulo_mini.tsv", sep = "\t")
 target_word = 'дуло' #'пила'#'печь'"дуло"
 q = q[q["word"] == target_word]
 q['word_id'] = q['word_id'].apply(lambda x: x.split('_')[-1])
@@ -35,9 +35,13 @@ pos_local_features = my_hom.CreatePosFeature(look = 3)
 function_rpe_features = my_hom.CreateFunctionRpeFeature(look = 10)
 nearest_pos_features = my_hom.CreateNearestPosFeature(look = 5)
 rpe_features = my_hom.CreateRpeFeature(look = 10)
-ud_features, ud_dep_features = my_hom.CreateDepFeature(verbose = True)
+ud_features, ud_dep_features = my_hom.CreateDepFeature(max_depth = 3, verbose = True)
 sent2vec_features = my_hom.CreateSent2VecFeature(verbose = False)
-print(sent2vec_features)
+#print(sent2vec_features)
+hyponym_features = my_hom.HyponymFeature(verbose = True)
+hypernym_features = my_hom.HypernymFeature(verbose = True)
+hyp_dep_features = my_hom.CreateHyponymDepFeature(verbose = True)
+bert_features = my_hom.CreateBERTFeature(verbose = True)
 
 #prev_markov_prob_features = my_hom.CreatePrevProbFeature(verbose = False)
 #next_markov_prob_features = my_hom.CreateNextProbFeature(verbose = False)
@@ -66,7 +70,11 @@ pos_local_features.columns = [("10_pos_local_features_" + str(q)) for q in pos_l
 rpe_features.columns = [("11_rpe_features_" + str(q)) for q in rpe_features.columns ]
 nearest_pos_features.columns = [("12_nearest_pos_features_" + str(q)) for q in nearest_pos_features.columns ]
 function_rpe_features.columns = [("13_function_rpe_features_" + str(q)) for q in function_rpe_features.columns ]
-#sent2vec_features.columns = [("14_function_rpe_features_" + str(q)) for q in sent2vec_features.columns ]
+sent2vec_features.columns = [("14_sent2vec_features_" + str(q)) for q in sent2vec_features.columns ]
+hyponym_features.columns = [("15_hyponym_features_" + str(q)) for q in hyponym_features.columns ]
+hypernym_features.columns = [("16_hypernym_features_" + str(q)) for q in hypernym_features.columns ]
+hyp_dep_features.columns = [("17_hyp_dep_features_" + str(q)) for q in hyp_dep_features.columns ]
+print(hyp_dep_features.max().to_string())
 rs = ShuffleSplit(n_splits=6, test_size=.2, random_state=0)
 split_n = 0
 for train_index, test_index in rs.split(pos_global_features.values):
@@ -81,7 +89,7 @@ for train_index, test_index in rs.split(pos_global_features.values):
     word_net_features_noun.columns = [("6_word_net_features_noun_" + str(q)) for q in word_net_features_noun.columns ]
     word_net_features_verb.columns = [("7_word_net_features_verb_" + str(q) )for q in word_net_features_verb.columns ]
     lemma_features.columns = [("8_lemma_features_" + str(q)) for q in lemma_features.columns ]
-
+    """
     print("ud_features")
     print(ud_features)
     print("ud_dep_features")
@@ -104,22 +112,29 @@ for train_index, test_index in rs.split(pos_global_features.values):
     print(function_rpe_features)
     print('sent2vec_features')
     print(sent2vec_features)
+    print('hyponym_features')
+    print(hyponym_features)
+    print('hypernym_features')
+    print(hypernym_features)
+    print('hyp_dep_features')
+    print(hyp_dep_features)
+    """
     #pos_local_features.columns = ["pos_local_features_" + str(q) for q in pos_local_features.columns ]
     #print(pos_global_features.shape, pos_local_features.shape, nearest_pos_features.shape, rpe_features.shape, prev_markov_prob_features.shape, next_markov_prob_features.shape, word_net_features_noun.shape, word_net_features_verb.shape)
-    Xtot = pd.concat((pos_global_features, pos_local_features, nearest_pos_features, rpe_features, lemma_features, word_net_features_noun, word_net_features_verb, ud_features, ud_dep_features, function_rpe_features, sent2vec_features), axis = 1)
-    ###Xtot = sent2vec_features
+    #####Xtot = pd.concat((pos_global_features, pos_local_features, nearest_pos_features, rpe_features, lemma_features, word_net_features_noun, word_net_features_verb, ud_features, ud_dep_features, function_rpe_features, sent2vec_features, hyponym_features, hypernym_features, hyp_dep_features), axis = 1)
+    Xtot = bert_features
     #Xtot = pd.concat((pos_global_features, lemma_features, word_net_features_noun, word_net_features_verb, ud_features, ud_dep_features, function_rpe_features)), axis = 1)
     #Xtot = ud_features
     #prev_markov_prob_features, next_markov_prob_features
-    Xtot = (Xtot - Xtot.mean())
-    Xtot = (Xtot/(Xtot.max()-Xtot.min())).fillna(0)
-    corr = Xtot.corr()
-    sns_heat = sns.heatmap(corr, xticklabels=corr.columns, yticklabels=corr.columns)
-    fig = sns_heat.get_figure()
-    corr.to_csv(f"{split_n}_corr.csv")
-    plt.show(block = False)
-    fig.savefig(f"{split_n}_corr.png")
-    plt.clf()
+    #####Xtot = (Xtot - Xtot.mean())
+    #####Xtot = (Xtot/(Xtot.max()-Xtot.min())).fillna(0)
+    #####corr = Xtot.corr()
+    #####sns_heat = sns.heatmap(corr, xticklabels=corr.columns, yticklabels=corr.columns)
+    #####fig = sns_heat.get_figure()
+    #####corr.to_csv(f"{split_n}_corr.csv")
+    #####plt.show(block = False)
+    #####fig.savefig(f"{split_n}_corr.png")
+    #####plt.clf()
     #plt.savefig(f"{split_n}_corr.png")
     split_n += 1
     X_aug = np.c_[Xtot, q[["sent"]].values]
@@ -127,7 +142,7 @@ for train_index, test_index in rs.split(pos_global_features.values):
     X_train, X_test, y_train, y_test = X_aug[train_index,:], X_aug[test_index,:], Y[train_index], Y[test_index]
 
     #mysgd = SGDClassifier(loss="hinge", penalty="elasticnet", tol=1e-5, n_jobs=-1, max_iter=10000, eta0=0.0000001, alpha=1e-3)
-    clf = RandomForestClassifier(random_state=0)
+    clf = RandomForestClassifier(criterion = 'entropy', random_state=0, n_jobs=-1)
     X_test_sent = X_test[:,-1:][:,0]
     X_test = X_test[:,:-1]
     X_train = X_train[:,:-1]
@@ -137,7 +152,7 @@ for train_index, test_index in rs.split(pos_global_features.values):
     #mysgd.fit(X_train, y_train)
     clf.fit(X_train, y_train)
     #print(mysgd.feature_importances_)
-    feat_importance = feat_importance.append(dict(zip(Xtot.columns, clf.feature_importances_)), ignore_index = True)
+    #####feat_importance = feat_importance.append(dict(zip(Xtot.columns, clf.feature_importances_)), ignore_index = True)
     #feat_importance = feat_importance.append(dict(zip(Xtot.columns, mysgd.coef_[0])), ignore_index = True)
 
     #r = permutation_importance(mysgd, X_train, y_train, n_repeats=30, random_state=1)
@@ -156,33 +171,33 @@ for train_index, test_index in rs.split(pos_global_features.values):
 
 
 #pl = sns.heatmap(feat_importance, annot=True) #X_train, y_train, n_repeats=30
-feat_importance = feat_importance.fillna(0).abs()
+#####feat_importance = feat_importance.fillna(0).abs()
 #perm_feat_importance = perm_feat_importance.fillna(0).abs()
 Xtot['y'] = Y
 Xtot.to_csv('all_features.csv')
 print('KIWIKIWIKIWIKIWIKWIKWIKWIWKIWKWI')
 #sns.heatmap(feat_importance, xticklabels=True, yticklabels=True, center = 0)
 #plt.show()
-feat_importance.to_csv('feat_importance.csv')
+#####feat_importance.to_csv('feat_importance.csv')
 #perm_feat_importance.to_csv('perm_feat_importance.csv')
 
 #feat_importance = feat_importance.groupby(feat_importance.columns.str[0],axis=1).sum().sum()
 
 #feat_importance = feat_importance.groupby(feat_importance.columns.str.split('_').str.get(0),axis=1).sum().sum()[['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13']]
-feat_importance = feat_importance.groupby(feat_importance.columns.str.split('_').str.get(0),axis=1).max().max()[['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14']]
+#####feat_importance = feat_importance.groupby(feat_importance.columns.str.split('_').str.get(0),axis=1).max().sum()[['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17']]
 
 #perm_feat_importance = perm_feat_importance.groupby(perm_feat_importance.columns.str.split('_').str.get(0),axis=1).sum().sum()[['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']]
 
 #perm_feat_importance = perm_feat_importance.groupby(perm_feat_importance.columns.str[0],axis=1).sum().sum()
 print('NEWESTSUPERKIWINEWESTSUPERKIWINEWESTSUPERKIWINEWESTSUPERKIWINEWESTSUPERKIWINEWESTSUPERKIWI')
-print(feat_importance.index)
+#####print(feat_importance.index)
 #feat_importance.index = ['pos_global_features', 'pos_local_features', 'nearest_pos_features', 'rpe_features', 'lemma_features', 'word_net_features_noun', 'word_net_features_verb', 'ud_features_0', 'ud_features_1', 'ud_features_2', 'ud_dep_features_3', 'ud_dep_features_4', 'ud_dep_features_5']
-feat_importance.index = ['ud_features_1', 'ud_features_2', 'ud_dep_features_3', 'ud_dep_features_4', 'ud_dep_features_5', 'word_net_features_noun', 'word_net_features_verb', 'lemma_features', 'pos_global_features', 'pos_local_features', 'rpe_features', 'nearest_pos_features', 'function_rpe_features', 'sent2vec_features' ]
+#####feat_importance.index = ['ud_features_1', 'ud_features_2', 'ud_dep_features_3', 'ud_dep_features_4', 'ud_dep_features_5', 'word_net_features_noun', 'word_net_features_verb', 'lemma_features', 'pos_global_features', 'pos_local_features', 'rpe_features', 'nearest_pos_features', 'function_rpe_features', 'sent2vec_features', 'hyponym_features', 'hypernym_features', 'hyp_dep_features' ]
 #feat_importance.index = ['ud_features_1', 'ud_features_2', 'ud_dep_features_3', 'ud_dep_features_4', 'ud_dep_features_5', 'word_net_features_noun', 'word_net_features_verb', 'lemma_features', 'pos_global_features', 'function_rpe_features' ]
 
 #perm_feat_importance.index = ['ud_features_0', 'ud_features_1', 'ud_features_2', 'ud_dep_features_3', 'ud_dep_features_4', 'ud_dep_features_5', 'word_net_features_noun', 'word_net_features_verb', 'lemma_features', 'pos_global_features', 'pos_local_features', 'rpe_features', 'nearest_pos_features' ]
-feat_importance.plot.bar()
-plt.show()
+#####feat_importance.plot.bar()
+#####plt.show()
 #perm_feat_importance.plot.bar()
 #plt.show()
 #plt.savefig('output.png')

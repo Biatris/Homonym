@@ -18,9 +18,11 @@ from operator import add
 from conll_df import conll_df
 from deeppavlov import build_model, configs
 import russian_tagsets
-from utils import dep, i_dep, create_row, create_row_ranked
+from utils import dep, i_dep, create_row, create_row_ranked, token_deps, target_word_embedding
 from itertools import product
 from joblib import load
+import torch
+import transformers
 
 class HomonymFeaturesException(Exception):
     def _init_ (self, *args):
@@ -377,7 +379,49 @@ class HomonymFeatures():
 
         return self.fulldata_words.groupby("sentence_num").apply(create_clue_counts)
 
-    def CreateDepFeature(self, language = "ru", verbose = False):
+    def HyponymFeature(self, language = "ru", verbose = False):
+        wikiwordnet  =  WikiWordnet ()
+        hyponym_corpus = []
+        def syn_to_list(l):
+            q = []
+            for g in l:
+                for s in g:
+                    for  hyponym  in  wikiwordnet.get_hyponyms (s):
+                        q = q + [ w.lemma ()  for  w  in  hyponym.get_words ()]
+            return q
+
+        for name, group in self.fulldata_words[['synset', 'sentence_num']].groupby('sentence_num'):
+            hyponym_corpus.append(syn_to_list(group['synset'].values))
+        hyponym_corpus = list(map(lambda x: ' '.join(x), hyponym_corpus))
+        print(hyponym_corpus)
+        vectorizer = HashingVectorizer(n_features=2**8)
+        X = pd.DataFrame(data = vectorizer.fit_transform(hyponym_corpus).todense())
+
+        return X
+
+    def HypernymFeature(self, language = "ru", verbose = False):
+        wikiwordnet  =  WikiWordnet ()
+        hypernym_corpus = []
+        def syn_to_list(l):
+            q = []
+            for g in l:
+                for s in g:
+                    for  hypernym  in  wikiwordnet.get_hypernyms (s):
+                        q = q + [ w.lemma ()  for  w  in  hypernym.get_words ()]
+            return q
+
+        for name, group in self.fulldata_words[['synset', 'sentence_num']].groupby('sentence_num'):
+            hypernym_corpus.append(syn_to_list(group['synset'].values))
+        hypernym_corpus = list(map(lambda x: ' '.join(x), hypernym_corpus))
+        print(hypernym_corpus)
+        vectorizer = HashingVectorizer(n_features=2**8)
+        X = pd.DataFrame(data = vectorizer.fit_transform(hypernym_corpus).todense())
+
+        return X
+
+
+
+    def CreateDepFeature(self, language = "ru", max_depth = 3, verbose = False):
         if language == "ru":
             self.ud_model = build_model("ru_syntagrus_joint_parsing")
             q = []
@@ -390,13 +434,13 @@ class HomonymFeatures():
             res_deps = []
             for r in q:
                 #res.append(create_row_ranked(r, self.target_word, self.allpos, self.alldeps))
-                q_pos, q_deps = create_row_ranked(r, self.target_word, self.allpos, self.alldeps)
+                q_pos, q_deps = create_row_ranked(r, self.target_word, self.allpos, self.alldeps, max_depth = max_depth)
                 res.append(q_pos)
                 res_deps.append(q_deps)
                 print(create_row_ranked(r, self.target_word, self.allpos, self.alldeps))
             res = pd.DataFrame(data = res, index = self.fulldata.index)
             res_deps = pd.DataFrame(data = res_deps, index = self.fulldata.index)
-            res.columns = [f"{x}_{y}_ud_features" for x, y in product(range (3), range (13))]
+            res.columns = [f"{x}_{y}_ud_features" for x, y in product(range (max_depth), range (13))]
             res_deps.columns = [f"{x}_{y}_ud_dep_features" for x, y in product(range (3, 6), range (37))]
             #dropping ud_0 features
             cols = [c for c in res.columns if c[0] != '0']
@@ -408,6 +452,58 @@ class HomonymFeatures():
 
         return res, res_deps
 
+    def CreateHyponymDepFeature(self, language = "ru", max_depth = 3, verbose = False):
+        if language == "ru":
+            self.ud_model = build_model("ru_syntagrus_joint_parsing")
+            q = []
+            for s in self.fulldata['sentence'].values:
+                q.append(self.ud_model([s])[0])
+            res = []
+            for sent in q:
+                file = open('temp/temp2.win', 'w')
+                file.write(sent)
+                file.close()
+                df = conll_df("temp/temp2.win", file_index=False)
+                df = df.reset_index()
+                print('/n', '/n')
+                print('sent')
+                print(sent)
+                print("MILLION KIWI")
+                print('df')
+                print(df)
+                r = df[df['w'] == self.target_word].iloc[0]
+                print('r')
+                print(r)
+                res.append(token_deps(r, df))
+            print(res)
+            hyp_res_corpus = list(map(lambda x: ' '.join(x), res))
+            print(hyp_res_corpus)
+            vectorizer = HashingVectorizer(n_features=2**4)
+            X = pd.DataFrame(data = vectorizer.fit_transform(hyp_res_corpus).todense())
+            return X
+
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
+
+        #return res, res_deps
+
     def CreateSent2VecFeature(self, language = "ru", verbose = False):
         hv = load('/Users/nataliatyulina/Desktop/Homonym/supermegahashvec.jl')
         return self.fulldata['sentence'].apply(lambda x: pd.Series(np.array(hv.transform([x]).todense())[0]))
+
+
+    def CreateBERTFeature(self, language = "ru", verbose = False):
+        if language == "ru":
+            tokenizer = transformers.AutoTokenizer.from_pretrained("DeepPavlov/rubert-base-cased")
+            model = transformers.AutoModel.from_pretrained("DeepPavlov/rubert-base-cased")
+            q = []
+            for s in self.fulldata['sentence'].values:
+                q.append(target_word_embedding(s, self.target_word, tokenizer, model))
+            res = pd.DataFrame(data = q)
+            return res
+        elif language == "en":
+            raise NotImplementedError
+        else:
+            NotImplementedError
